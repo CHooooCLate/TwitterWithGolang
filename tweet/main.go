@@ -17,6 +17,11 @@ import (
   //"github.com/davecgh/go-spew/spew"
 )
 
+type Request struct {
+    Animal string `json:"animal"`
+}
+
+
 func loadEnv() {
     err := godotenv.Load()
     if err != nil {
@@ -30,7 +35,7 @@ func getTwitterApi() *anaconda.TwitterApi {
     return anaconda.NewTwitterApi(os.Getenv("ACCESS_TOKEN"), os.Getenv("ACCESS_TOKEN_SECRET"))
 }
 
-func Handler() (string, error) {
+func Handler(request Request) (string, error) {
     fmt.Println("Start twimal")
 
     // ファイルをOpenする
@@ -53,7 +58,18 @@ func Handler() (string, error) {
     v := url.Values{}
     v.Set("count", "10")
 
-    searchResult, _ := api.GetSearch("犬 OR 猫　OR 動物 filter:videos", v)
+    var searchResult anaconda.SearchResponse
+
+    switch request.Animal {
+        case "dog":
+            searchResult, _ = api.GetSearch("犬 OR dog filter:videos", v)
+        case "cat":
+            searchResult, _ = api.GetSearch("猫 OR cat filter:videos", v)
+        case "fish":
+            searchResult, _ = api.GetSearch("魚 OR fish filter:videos", v)
+        default:
+            searchResult, _ = api.GetSearch("犬 OR 猫　OR 動物 filter:videos", v)
+    }
 
     // HTMLにTweetを埋め込み
     list := "<ul>"
