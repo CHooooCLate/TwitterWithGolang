@@ -59,8 +59,6 @@ func createSessionId(screenName string) (string) {
 //func Handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 // Cookie渡せないのでこっち
 func Handler(request Request) (string, error) {
-    fmt.Println("Start Callback")
-
     loadEnv()
 
     //OAuthの設定
@@ -79,37 +77,43 @@ func Handler(request Request) (string, error) {
         Region: aws.String("us-east-2"), // "ap-northeast-1"等
     })
 
-    table := db.Table("Token")
+    tokenTable := db.Table("Token")
 
     // DBからOAuthトークンの取得
     var token []Token
-    err := table.Get("id", 0).All(&token)
+    err := tokenTable.Get("id", 0).All(&token)
     if err != nil {
         fmt.Println("err")
         panic(err.Error())
     }
+    //return request.OauthToken, err
 
-    var tempCredentials *oauth.Credentials
-    tempCredentials.Token = token[0].OauthToken
-    tempCredentials.Secret = token[0].SecretToken
-
-    // Twitterから返されたOAuthトークンと、あらかじめlogin.goで入れておいたセッション上のものと一致するかをチェック
-    //if tempCredentials.Token != request.PathParameters["oauth_token"] {
-        //fmt.Println("invalid oauth_token")
-    //}
-
-    //アクセストークンの取得
-    tokenCard, _, err := oauthClient.RequestToken(nil, tempCredentials, request.OauthVerifier)
-    if err != nil {
-        log.Fatal("RequestToken:", err)
+    tempCredentials := &oauth.Credentials{
+        Token: token[0].OauthToken,
+        Secret: token[0].SecretToken,
     }
 
-    spew.Dump(tokenCard)
+    OauthToken := request.OauthToken
+    OauthVerifier := request.OauthVerifier
+
+    // Twitterから返されたOAuthトークンと、あらかじめlogin.goで入れておいたセッション上のものと一致するかをチェック
+    if tempCredentials.Token != OauthToken {
+        panic(tempCredentials.Token + "_" + OauthToken)
+    }
+
+    //アクセストークンの取得
+    tokenCard, _, err := oauthClient.RequestToken(nil, tempCredentials, OauthVerifier)
+    if err != nil {
+        log.Fatal("RequestToken:", err)
+        panic(err.Error())
+    }
 
     // 時間取得時のフォーマット指定
     format := "2006-01-02 15:04:05"
 
     screenName := "a"
+
+    sessionTable := db.Table("Session")
 
     s := Session{
         Id: createSessionId(screenName),
@@ -118,10 +122,12 @@ func Handler(request Request) (string, error) {
         RegisterDate: time.Now().Format(format),
     }
 
-    if err := table.Put(s).Run(); err != nil {
+    if err := sessionTable.Put(s).Run(); err != nil {
         fmt.Println("err")
         panic(err.Error())
     }
+
+    spew.Dump(tokenCard)
 
     return tokenCard.Token, err
 
