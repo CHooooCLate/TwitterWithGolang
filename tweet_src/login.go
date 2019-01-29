@@ -6,8 +6,8 @@ import (
     "github.com/aws/aws-lambda-go/lambda"
     "github.com/aws/aws-sdk-go/aws"
     "github.com/aws/aws-sdk-go/aws/session"
-    "github.com/aws/aws-sdk-go/service/dynamodb"
     "github.com/gomodule/oauth1/oauth"
+    "github.com/guregu/dynamo"
     "github.com/joho/godotenv"
 
     "log"
@@ -59,41 +59,36 @@ func Handler() (string, error) {
 
     spew.Dump(tempCredentials)
 
-    // session
-    sess, err := session.NewSession()
-    if err != nil {
-        panic(err)
-    }
+    // DynamoDBへ接続
+    db := dynamo.New(session.New(), &aws.Config{
+        Region: aws.String("us-east-2"), // "ap-northeast-1"等
+    })
 
-    svc := dynamodb.New(sess)
+    table := db.Table("Token")
 
     // 時間取得時のフォーマット指定
     format := "2006-01-02 15:04:05"
 
-    // PutItem
-    putParams := &dynamodb.PutItemInput{
-        TableName: aws.String("Token"),
-        Item: map[string]*dynamodb.AttributeValue{
-            "id": {
-                N: aws.String("0"),
-            },
-            "oauth_token": {
-                S: aws.String(tempCredentials.Token),
-            },
-            "secret_token": {
-                S: aws.String(tempCredentials.Secret),
-            },
-            "register_date": {
-                S: aws.String(time.Now().Format(format)),
-            },
-        },
+    t := Token{
+        Id: 0,
+        OauthToken: tempCredentials.Token,
+        SecretToken: tempCredentials.Secret,
+        RegisterDate: time.Now().Format(format),
     }
 
-    putItem, putErr := svc.PutItem(putParams)
-    if putErr != nil {
-        panic(putErr)
+    if err := table.Put(t).Run(); err != nil {
+        fmt.Println("err")
+        panic(err.Error())
     }
-    fmt.Println(putItem)
+
+    // DBからOAuthトークンの取得
+    var token []Token
+    err = table.Get("id", 0).All(&token)
+    if err != nil {
+        fmt.Println("err")
+        panic(err.Error())
+    }
+    spew.Dump(token[0].OauthToken)
 
     authorizeUrl := oauthClient.AuthorizationURL(tempCredentials, nil)
 
