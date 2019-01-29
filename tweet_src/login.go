@@ -81,15 +81,6 @@ func Handler() (string, error) {
         panic(err.Error())
     }
 
-    // DBからOAuthトークンの取得
-    var token []Token
-    err = table.Get("id", 0).All(&token)
-    if err != nil {
-        fmt.Println("err")
-        panic(err.Error())
-    }
-    spew.Dump(token[0].OauthToken)
-
     authorizeUrl := oauthClient.AuthorizationURL(tempCredentials, nil)
 
     return authorizeUrl, nil
