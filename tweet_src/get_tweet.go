@@ -37,6 +37,10 @@ type Account struct {
 	Email           string `json:"email"`
 }
 
+type Tweet struct {
+
+}
+
 func loadEnv() {
     err := godotenv.Load("/var/task/tweet/.env")
     //err := godotenv.Load(".env")
@@ -74,21 +78,23 @@ func Handler() (string, error) {
         panic(err.Error())
     }
 
-spew.Dump(session)
-
     tokenCard := &oauth.Credentials{
         Token: session[0].AccessToken,
         Secret: session[0].SecretToken,
     }
-spew.Dump(tokenCard)
+
     var user Account
     response, err := oauthClient.Get(nil, tokenCard, "https://api.twitter.com/1.1/account/verify_credentials.json", nil)
     if err != nil {
 		panic(err)
 	}
     body, err := ioutil.ReadAll(response.Body)
+
     err = json.Unmarshal(body,&user)
-spew.Dump(user)
+
+    // userをinterface[]にするとこう取れる
+    //userData := user.([]interface{})[0].(map[string]interface{})["screen_name"].(string)
+
     return "", nil
 }
 

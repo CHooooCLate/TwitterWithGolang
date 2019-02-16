@@ -57,8 +57,6 @@ func Handler() (string, error) {
         log.Fatal("RequestTemporaryCredentials:", err)
     }
 
-    spew.Dump(tempCredentials)
-
     // DynamoDBへ接続
     db := dynamo.New(session.New(), &aws.Config{
         Region: aws.String("us-east-2"), // "ap-northeast-1"等

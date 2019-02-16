@@ -16,19 +16,19 @@ import (
     "io/ioutil"
     "log"
     "os"
+    "regexp"
     "time"
 
     // デバッグ用
     // spew.Dump(value)
-    //"github.com/davecgh/go-spew/spew"
+    "github.com/davecgh/go-spew/spew"
     // reflect.TypeOf(value)
     //"reflect"
 )
 
-// APIGatewayからのリクエストを受け取るための構造体
+// 前のページから引き継がれたCookieを受け取るための構造体
 type Request struct {
-    OauthToken string `json:"oauth_token"`
-    OauthVerifier string `json:"oauth_verifier"`
+    Cookie string `json:"Cookie"`
 }
 
 // TwitterAPIから取得した一時Tokenを保存するための構造体
@@ -54,12 +54,8 @@ type Account struct {
 
 // APIGatewayへのレスポンスを定義するための構造体
 type Response struct {
-    Location string `json:"location"`
     Cookie string `json:"cookie"`
-}
-
-type Cookie struct {
-    Id string `json:id`
+    Html string `json:"html"`
 }
 
 func loadEnv() {
@@ -97,39 +93,30 @@ func Handler(request Request) (Response, error) {
         Region: aws.String("us-east-2"), // "ap-northeast-1"等
     })
 
-    // Tokenテーブル
-    tokenTable := db.Table("Token")
+    // Sessionテーブル
+    sessionTable := db.Table("Session")
 
-    // DBからOAuthトークンの取得
-    var token []Token
-    err := tokenTable.Get("id", 0).All(&token)
+    spew.Dump(request.Cookie)
+
+	assigned := regexp.MustCompile("id=(.*)")
+	group := assigned.FindSubmatch([]byte(request.Cookie))
+    sessionId := string(group[1])
+    spew.Dump(sessionId)
+
+    // Cookieから取得したsession_idを元に、アクセストークンを取得
+    var session []Session
+    err := sessionTable.Get("id", sessionId).All(&session)
     if err != nil {
-        fmt.Println("err")
         panic(err.Error())
     }
 
     // OAuthトークンを決められた構造体にする
-    tempCredentials := &oauth.Credentials{
-        Token: token[0].OauthToken,
-        Secret: token[0].SecretToken,
+    tokenCard := &oauth.Credentials{
+        Token: session[0].AccessToken,
+        Secret: session[0].SecretToken,
     }
 
-    // Twitterから返されたOAuthトークンと、あらかじめlogin.goで入れておいたセッション上のものと一致するかをチェック
-    if tempCredentials.Token != request.OauthToken {
-        panic(tempCredentials.Token + "_" + request.OauthToken)
-    }
-
-    //アクセストークンの取得
-    tokenCard, _, err := oauthClient.RequestToken(nil, tempCredentials, request.OauthVerifier)
-    if err != nil {
-        log.Fatal("RequestToken:", err)
-        panic(err.Error())
-    }
-
-    // 時間取得時のフォーマット指定
-    format := "2006-01-02 15:04:05"
-
-    // TwitterAPIからアクセストークンの取得
+    // TwitterAPIからユーザー情報の取得
     response, err := oauthClient.Get(nil, tokenCard, "https://api.twitter.com/1.1/account/verify_credentials.json", nil)
     if err != nil {
 		panic(err)
@@ -140,31 +127,9 @@ func Handler(request Request) (Response, error) {
     var user Account
     err = json.Unmarshal(body,&user)
 
-    // Sessionテーブル
-    sessionTable := db.Table("Session")
-
-    // session_idの作成
-    id := createSessionId(user.ScreenName)
-
-    // Sessionテーブルに格納するレコードの作成
-    s := Session{
-        Id: id,
-        AccessToken: tokenCard.Token,
-        SecretToken: tokenCard.Secret,
-        RegisterDate: time.Now().Format(format),
-    }
-    // INSERTの実行
-    if err = sessionTable.Put(s).Run(); err != nil {
-        fmt.Println("err")
-        panic(err.Error())
-    }
-
-    // リダイレクトさせてCookieをつけたい
-    redirectUrl := "https://mb8mab272h.execute-api.us-east-2.amazonaws.com/twimal/my-page"
-
     returnResponse := Response{
-        Location: redirectUrl,
-        Cookie: fmt.Sprintf("id=%s;", id),
+        Cookie: fmt.Sprintf("id=%s;", "0"),
+        Html: user.ScreenName,
     }
 
     return returnResponse, err
