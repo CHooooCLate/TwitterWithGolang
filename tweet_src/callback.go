@@ -16,6 +16,7 @@ import (
     "io/ioutil"
     "log"
     "os"
+    "regexp"
     "time"
 
     // デバッグ用
@@ -29,11 +30,12 @@ import (
 type Request struct {
     OauthToken string `json:"oauth_token"`
     OauthVerifier string `json:"oauth_verifier"`
+    Cookie string `json:"Cookie"`
 }
 
 // TwitterAPIから取得した一時Tokenを保存するための構造体
 type Token struct {
-  Id int `dynamo:"id"`
+  Id string `dynamo:"id"`
   OauthToken string `dynamo:"oauth_token"`
   SecretToken string `dynamo:"secret_token"`
   RegisterDate string `dynamo:"register_date"`
@@ -100,9 +102,14 @@ func Handler(request Request) (Response, error) {
     // Tokenテーブル
     tokenTable := db.Table("Token")
 
+    // session_idの取り出し
+    assigned := regexp.MustCompile("id=(.*)")
+	group := assigned.FindSubmatch([]byte(request.Cookie))
+    sessionId := string(group[1])
+
     // DBからOAuthトークンの取得
     var token []Token
-    err := tokenTable.Get("id", 0).All(&token)
+    err := tokenTable.Get("id", sessionId).All(&token)
     if err != nil {
         fmt.Println("err")
         panic(err.Error())

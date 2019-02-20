@@ -1,6 +1,7 @@
 package main
 
 import (
+    "encoding/base64"
     "fmt"
 
     "github.com/aws/aws-lambda-go/lambda"
@@ -11,21 +12,29 @@ import (
     "github.com/joho/godotenv"
 
     "log"
+    "math/rand"
     "os"
+    "strconv"
     "time"
 
     // デバッグ用
     // spew.Dump(value)
-    "github.com/davecgh/go-spew/spew"
+    //"github.com/davecgh/go-spew/spew"
     // reflect.TypeOf(value)
     //"reflect"
 )
 
 type Token struct {
-  Id int `dynamo:"id"`
+  Id string `dynamo:"id"`
   OauthToken string `dynamo:"oauth_token"`
   SecretToken string `dynamo:"secret_token"`
   RegisterDate string `dynamo:"register_date"`
+}
+
+// APIGatewayへのレスポンスを定義するための構造体
+type Response struct {
+    Location string `json:"location"`
+    Cookie string `json:"cookie"`
 }
 
 func loadEnv() {
@@ -36,7 +45,12 @@ func loadEnv() {
     }
 }
 
-func Handler() (string, error) {
+func createSessionId() (string) {
+    str := strconv.Itoa(rand.Intn(1000)) + time.Now().Format("2006-01-02 15:04:05")
+    return base64.URLEncoding.EncodeToString([]byte(str))
+}
+
+func Handler() (Response, error) {
     loadEnv()
 
     // OAuthの設定
@@ -67,8 +81,11 @@ func Handler() (string, error) {
     // 時間取得時のフォーマット指定
     format := "2006-01-02 15:04:05"
 
+    // session_idの作成
+    id := createSessionId()
+
     t := Token{
-        Id: 0,
+        Id: id,
         OauthToken: tempCredentials.Token,
         SecretToken: tempCredentials.Secret,
         RegisterDate: time.Now().Format(format),
@@ -81,7 +98,12 @@ func Handler() (string, error) {
 
     authorizeUrl := oauthClient.AuthorizationURL(tempCredentials, nil)
 
-    return authorizeUrl, nil
+    response := Response{
+        Location: authorizeUrl,
+        Cookie: fmt.Sprintf("id=%s;", id),
+    }
+
+    return response, nil
 }
 
 func main() {
