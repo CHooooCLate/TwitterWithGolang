@@ -71,9 +71,6 @@ func createSessionId(screenName string) (string) {
     return base64.URLEncoding.EncodeToString([]byte(str))
 }
 
-// Cookie渡せたらこっち
-//func Handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-// Cookie渡せないのでこっち
 func Handler(request Request) (Response, error) {
     loadEnv()
 
